@@ -1,0 +1,116 @@
+# Read in the data
+
+tweets = read.csv("tweets.csv", stringsAsFactors=FALSE)
+
+str(tweets)
+
+
+# Create dependent variable
+
+tweets$Negative = as.factor(tweets$Avg <= -1)
+
+table(tweets$Negative)
+
+
+# Install new packages
+
+install.packages("tm")
+library(tm)
+install.packages("SnowballC")
+library(SnowballC)
+
+
+# Create corpus
+corpus = VCorpus(VectorSource(tweets$Tweet)) 
+
+# Convert to lower-case
+
+corpus = tm_map(corpus, content_transformer(tolower))
+
+# Remove punctuation
+
+corpus = tm_map(corpus, removePunctuation)
+
+
+# Remove stopwords and apple
+
+corpus = tm_map(corpus, removeWords, c("apple", stopwords("english")))
+
+# Stem document 
+
+corpus = tm_map(corpus, stemDocument)
+
+
+# Create matrix
+
+frequencies = DocumentTermMatrix(corpus)
+
+# Remove sparse terms
+
+sparse = removeSparseTerms(frequencies, 0.995)
+
+# Convert to a data frame
+
+tweetsSparse = as.data.frame(as.matrix(sparse))
+
+# Make all variable names R-friendly
+
+colnames(tweetsSparse) = make.names(colnames(tweetsSparse))
+
+# Add dependent variable
+
+tweetsSparse$Negative = tweets$Negative
+
+# Split the data
+
+library(caTools)
+
+set.seed(123)
+
+split = sample.split(tweetsSparse$Negative, SplitRatio = 0.7)
+
+trainSparse = subset(tweetsSparse, split==TRUE)
+testSparse = subset(tweetsSparse, split==FALSE)
+
+
+# Build a CART model
+
+library(rpart)
+library(rpart.plot)
+
+tweetCART = rpart(Negative ~ ., data=trainSparse, method="class")
+
+# For viewing classification tree
+prp(tweetCART)
+
+# Evaluate the performance of the model
+predictCART = predict(tweetCART, newdata=testSparse, type="class")
+
+table(testSparse$Negative, predictCART)
+
+# Compute accuracy
+
+(294+18)/(294+6+37+18)
+# = 87%
+# Baseline accuracy 
+
+table(testSparse$Negative)
+
+300/(300+55)
+# = 84%
+
+# Random forest model
+
+library(randomForest)
+set.seed(123)
+
+tweetRF = randomForest(Negative ~ ., data=trainSparse)
+
+# Make predictions:
+predictRF = predict(tweetRF, newdata=testSparse)
+
+table(testSparse$Negative, predictRF)
+
+# Accuracy:
+(293+21)/(293+7+34+21)
+# = 86%
